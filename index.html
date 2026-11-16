@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StallScope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2F5FA;--ink:#10223C;--mute:#566884;--line:#CBD6E6;--grid:rgba(47,107,255,.09);--panel:#FFFFFF;--accent:#2F6BFF;--onaccent:#fff;
+--if:#2F6BFF;--id:#7C4DFF;--ex:#FFB020;--mem:#12A594;--wb:#E4408E;--stall:#E5484D;--ok:#12A594;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0D2747;--ink:#E8F0FF;--mute:#9DB4D6;--line:#2A5384;--grid:rgba(255,255,255,.06);--panel:#123560;--accent:#7BA3FF;--onaccent:#0D2747;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0D2747;--ink:#E8F0FF;--mute:#9DB4D6;--line:#2A5384;--grid:rgba(255,255,255,.06);--panel:#123560;--accent:#7BA3FF;--onaccent:#0D2747;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background-color:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:22px 22px;color:var(--ink);font-family:"Bricolage Grotesque",ui-rounded,system-ui,sans-serif;line-height:1.5}
+.wrap{max-width:980px;margin:0 auto;padding:22px 16px 48px}
+h1{font-size:clamp(2rem,7vw,3.2rem);line-height:1.02;margin:6px 0 8px;font-weight:800;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 22px;max-width:44ch;font-size:1.05rem}
+.mono,textarea,td.lab{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+fieldset{border:0;padding:0;margin:0 0 16px}
+legend{font-weight:700;margin-bottom:8px;padding:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{font:inherit;font-weight:500;padding:9px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--onaccent);font-weight:700}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:14px}
+.switch{display:flex;align-items:center;gap:12px;cursor:pointer;font-weight:700}
+.switch input{position:absolute;opacity:0}
+.track{width:50px;height:28px;border-radius:999px;background:var(--line);position:relative;transition:background .2s;flex:none}
+.track::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch input:checked+.track{background:var(--ok)}
+.switch input:checked+.track::after{transform:translateX(22px)}
+.switch input:focus-visible+.track,button:focus-visible,textarea:focus-visible,input[type=range]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.hint{color:var(--mute);font-weight:400;font-size:.92rem}
+textarea{width:100%;min-height:150px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);font-size:.95rem;line-height:1.6;resize:vertical}
+.btn{font:inherit;font-weight:700;padding:11px 18px;border-radius:12px;border:0;background:var(--accent);color:var(--onaccent);cursor:pointer}
+.btn.alt{background:var(--panel);color:var(--ink);border:1.5px solid var(--line)}
+.stage{margin:22px 0 8px;padding:14px;background:var(--panel);border:1.5px solid var(--line);border-radius:16px}
+.scroll{overflow-x:auto;padding-bottom:6px}
+table{border-collapse:separate;border-spacing:3px;min-width:100%}
+th{font:600 .75rem "JetBrains Mono",monospace;color:var(--mute);text-align:center;min-width:46px}
+td.lab,th.lab{position:sticky;left:0;background:var(--panel);z-index:2;text-align:left;font-size:.78rem;white-space:nowrap;padding:0 10px 0 0;min-width:140px}
+td{height:34px;min-width:46px;border-radius:7px;text-align:center;font:600 .72rem "JetBrains Mono",monospace;color:#fff;transition:opacity .25s}
+td.lab{background:var(--panel);color:var(--ink);font-weight:400;border-radius:0}
+td.IF{background:var(--if)}td.ID{background:var(--id)}td.EX{background:var(--ex);color:#2B1B00}td.MEM{background:var(--mem)}td.WB{background:var(--wb)}
+td.st{background:repeating-linear-gradient(135deg,var(--stall) 0 5px,#F5A3A5 5px 10px);color:transparent}
+td.off{opacity:.1}
+td.now{box-shadow:0 0 0 2.5px var(--ink)}
+.ctl{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+input[type=range]{flex:1;min-width:140px;accent-color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:.85rem;color:var(--mute)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:6px;vertical-align:-1px}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);margin:20px 0;border-top:2px solid var(--ink);border-bottom:1.5px solid var(--line)}
+.nums div{padding:12px 8px 12px 0}
+.nums div+div{padding-left:12px;border-left:1.5px solid var(--line)}
+.nums b{display:block;font-size:clamp(1.5rem,6vw,2.3rem);font-weight:800;line-height:1.1}
+.nums span{color:var(--mute);font-size:.85rem}
+.diag h2,.note h2{font-size:1.15rem;margin:0 0 8px}
+.diag ul{margin:0;padding-left:20px}.diag li{margin-bottom:6px}
+.good{color:var(--ok);font-weight:700}
+.banner{margin-top:14px;padding:12px 14px;border-left:5px solid var(--ok);background:var(--panel);border-radius:0 12px 12px 0;font-weight:500}
+.foot{color:var(--mute);font-size:.88rem;margin-top:28px;max-width:60ch}
+.sr{position:absolute;left:-9999px}
+.blab{margin:34px 0 0}.blab h2{font-size:1.15rem;margin:0 0 6px}
+.strip{overflow-x:auto;margin:14px 0 6px;padding:12px;background:var(--panel);border:1.5px solid var(--line);border-radius:16px}
+.srow{display:flex;gap:4px;align-items:center;margin:5px 0;min-width:max-content}
+.srow>em{font-style:normal;width:56px;font-size:.8rem;color:var(--mute);flex:none}
+.cell{width:22px;height:26px;border-radius:6px;text-align:center;font:600 .72rem/26px "JetBrains Mono",monospace;color:#fff}
+.cell.T{background:var(--if)}.cell.N{background:#8794AB}
+.cell.bad{box-shadow:0 0 0 2.5px var(--stall)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>StallScope</h1>
+<p class="sub">Paste assembly code and see exactly where the CPU has to wait, and why.</p>
+
+<fieldset>
+<legend>Pick a program</legend>
+<div class="chips" id="chips"></div>
+</fieldset>
+
+<div class="row">
+<label class="switch"><input type="checkbox" id="fw" checked><span class="track"></span><span>Forwarding<br><span class="hint">Pass a result straight to the next instruction</span></span></label>
+</div>
+
+<label for="code" class="sr">Assembly code</label>
+<textarea id="code" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+<div class="row" style="margin-top:12px">
+<button class="btn" id="fix">Reorder to remove stalls</button>
+<span class="hint" id="fixhint">Works on up to 8 instructions.</span>
+</div>
+<div id="banner" class="banner" hidden></div>
+
+<section class="stage" aria-label="Pipeline diagram">
+<div class="scroll"><table id="gantt"></table></div>
+<div class="ctl">
+<button class="btn" id="play">Play</button>
+<button class="btn alt" id="step">Step</button>
+<input type="range" id="slider" min="0" max="1" value="1" aria-label="Cycle">
+<span class="mono" id="cyc"></span>
+</div>
+<div class="legend">
+<span><i style="background:var(--if)"></i>Fetch</span><span><i style="background:var(--id)"></i>Decode</span><span><i style="background:var(--ex)"></i>Execute</span><span><i style="background:var(--mem)"></i>Memory</span><span><i style="background:var(--wb)"></i>Write back</span><span><i style="background:repeating-linear-gradient(135deg,var(--stall) 0 3px,#F5A3A5 3px 6px)"></i>Stall</span>
+</div>
+</section>
+
+<div class="nums" aria-live="polite">
+<div><b id="n-cyc">0</b><span>cycles</span></div>
+<div><b id="n-st">0</b><span>stall cycles</span></div>
+<div><b id="n-cpi">0</b><span>cycles per instruction</span></div>
+<div><b id="n-sp">0</b><span>faster than no pipeline</span></div>
+</div>
+
+<section class="diag">
+<h2>What stalled, and why</h2>
+<ul id="found"></ul>
+</section>
+
+<section class="blab" aria-label="Cloud check">
+<h2>Cloud check</h2>
+<p class="hint" style="margin:0 0 12px">Sends your program to the StallScope cloud API. The API runs its own simulation, tries every safe order of the instructions, and a machine learning model, trained on programs simulated with PySpark, estimates how many cycles a better order could save without searching.</p>
+<div class="row"><button class="btn" id="cloud">Check in the cloud</button><span class="hint" id="cstat"></span></div>
+<div id="cres" class="banner" hidden></div>
+</section>
+
+<section class="blab" aria-label="Branch lab">
+<h2>Branch lab</h2>
+<p class="hint" style="margin:0 0 12px">A branch makes the CPU guess which instruction comes next. Every wrong guess throws away 2 cycles of work. The last box assumes 1 in 5 instructions is a branch.</p>
+<fieldset><legend>How the branch behaves</legend><div class="chips" id="pat"></div></fieldset>
+<fieldset><legend>Which predictor guesses</legend><div class="chips" id="pred"></div></fieldset>
+<div class="strip" id="strip" role="img" aria-label="Actual and guessed branch outcomes"></div>
+<div class="nums" aria-live="polite">
+<div><b id="b-acc">0</b><span>percent correct</span></div>
+<div><b id="b-mis">0</b><span>wrong guesses of 24</span></div>
+<div><b id="b-pen">0</b><span>cycles lost</span></div>
+<div><b id="b-cpi">0</b><span>cycles per instruction</span></div>
+</div>
+<p id="b-say" class="banner" style="margin-top:0"></p>
+</section>
+
+<p class="foot">Prototype of a classic 5-stage in-order pipeline. The diagram covers data hazards (a later instruction waiting for an earlier result). The branch lab covers branch hazards (T means taken, N means not taken; a red ring is a wrong guess).</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const SAMPLES = {
+  "Load then use": "lw  r1, 0(r2)\nadd r3, r1, r4\nlw  r5, 4(r2)\nsub r6, r5, r7\nsw  r6, 8(r2)",
+  "Chain of results": "add r1, r2, r3\nsub r4, r1, r5\nand r6, r4, r1\nor  r7, r6, r4",
+  "Array sum": "lw  r1, 0(r5)\nlw  r2, 4(r5)\nadd r3, r1, r2\nlw  r4, 8(r5)\nadd r6, r3, r4\nsw  r6, 12(r5)",
+  "No dependencies": "add r1, r2, r3\nsub r4, r5, r6\nand r7, r8, r9\nor  r10, r11, r12"
+};
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const isReg = x => /^r\d+$/.test(x || "");
+
+function parse(code) {
+  const out = [];
+  for (let line of code.split("\n")) {
+    line = line.split("#")[0].trim();
+    if (!line) continue;
+    const t = line.split(/[,\s()]+/).filter(Boolean), op = t[0].toLowerCase(), r = t.slice(1);
+    if (op === "lw") out.push({ text: line, op, rd: r[0], src: [r[2]] });
+    else if (op === "sw") out.push({ text: line, op, rd: null, src: [r[0], r[2]] });
+    else if (op === "beq" || op === "bne") out.push({ text: line, op, rd: null, src: [r[0], r[1]] });
+    else out.push({ text: line, op, rd: r[0], src: [r[1], r[2]] });
+  }
+  return out;
+}
+
+function sim(prog, fw) {
+  const ready = {}, rows = [];
+  let pf = 0, pd = 0, pE = 0;
+  prog.forEach((ins, i) => {
+    const f = i === 0 ? 1 : Math.max(pf + 1, pd), d = Math.max(f + 1, pE), base = d + 1;
+    let need = base, why = null;
+    for (const r of ins.src) {
+      if (isReg(r) && r !== "r0" && ready[r]) {
+        const [Ej, ld, j] = ready[r], av = fw ? Ej + (ld ? 2 : 1) : Ej + 3;
+        if (av > need) { need = av; why = { reg: r, from: j }; }
+      }
+    }
+    rows.push({ ins, f, d, E: need, stall: need - base, why });
+    if (ins.rd) ready[ins.rd] = [need, ins.op === "lw", i];
+    pf = f; pd = d; pE = need;
+  });
+  return rows;
+}
+const totalOf = rows => rows[rows.length - 1].E + 2;
+
+function best(prog, fw) {
+  const n = prog.length;
+  if (n > 8) return null;
+  const mem = x => x.op === "lw" || x.op === "sw";
+  const dep = (a, b) => {
+    const ar = a.src.filter(isReg), br = b.src.filter(isReg);
+    return (a.rd && br.includes(a.rd)) || (b.rd && ar.includes(b.rd)) || (a.rd && a.rd === b.rd) ||
+      (mem(a) && mem(b) && (a.op === "sw" || b.op === "sw")) || a.op === "beq" || a.op === "bne" || b.op === "beq" || b.op === "bne";
+  };
+  const preds = prog.map((b, j) => prog.slice(0, j).map((a, i) => dep(a, b) ? i : -1).filter(i => i >= 0));
+  let bestOrder = prog.map((_, i) => i), bestT = totalOf(sim(prog, fw));
+  const used = new Array(n).fill(false), cur = [];
+  (function go() {
+    if (cur.length === n) {
+      const t = totalOf(sim(cur.map(i => prog[i]), fw));
+      if (t 
