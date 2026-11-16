@@ -204,4 +204,197 @@ function best(prog, fw) {
   (function go() {
     if (cur.length === n) {
       const t = totalOf(sim(cur.map(i => prog[i]), fw));
-      if (t 
+      if (t < bestT) { bestT = t; bestOrder = cur.slice(); }
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      if (used[i] || !preds[i].every(p => used[p])) continue;
+      used[i] = true; cur.push(i); go(); cur.pop(); used[i] = false;
+    }
+  })();
+  return bestOrder;
+}
+
+let prog = [], rows = [], total = 0, cur = 0, timer = null;
+
+function count(el, to, dec) {
+  const from = parseFloat(el.dataset.v || 0), t0 = performance.now();
+  (function tick(t) {
+    const k = Math.min(1, (t - t0) / 450), v = from + (to - from) * k;
+    el.textContent = v.toFixed(dec);
+    if (k < 1) requestAnimationFrame(tick); else el.dataset.v = to;
+  })(t0);
+}
+
+function run() {
+  stop();
+  prog = parse($("code").value);
+  if (!prog.length) { $("gantt").innerHTML = ""; $("found").innerHTML = "<li>Add an instruction, for example <span class=\"mono\">add r1, r2, r3</span>.</li>"; return; }
+  rows = sim(prog, $("fw").checked);
+  total = totalOf(rows);
+  cur = total;
+  draw();
+  const stalls = rows.reduce((s, r) => s + r.stall, 0), n = prog.length;
+  count($("n-cyc"), total, 0); count($("n-st"), stalls, 0);
+  count($("n-cpi"), total / n, 2); count($("n-sp"), 5 * n / total, 2);
+  $("n-sp").nextElementSibling.textContent = "times faster than no pipeline";
+  const f = [];
+  rows.forEach((r, i) => {
+    if (r.stall > 0 && r.why) {
+      f.push(`<li>Instruction ${i + 1} (<span class="mono">${esc(r.ins.text)}</span>) needs <b>${r.why.reg}</b> from instruction ${r.why.from + 1}, so the pipeline waits <b>${r.stall} cycle${r.stall > 1 ? "s" : ""}</b>.</li>`);
+    }
+  });
+  if (!f.length) f.push("<li class=\"good\">No stalls. Every instruction flows through without waiting.</li>");
+  else if ($("fw").checked) f.push("<li>With forwarding, only a result that comes from memory (a load) still has to wait one cycle.</li>");
+  $("found").innerHTML = f.join("");
+}
+
+function draw() {
+  const h = ["<tr><th class=\"lab\"></th>"];
+  for (let c = 1; c <= total; c++) h.push(`<th>${c}</th>`);
+  h.push("</tr>");
+  rows.forEach(r => {
+    h.push(`<tr><td class="lab">${esc(r.ins.text)}</td>`);
+    for (let c = 1; c <= total; c++) {
+      let k = "", t = "";
+      if (c === r.f) { k = "IF"; t = "IF"; }
+      else if (c > r.f && c < r.d) { k = "st"; t = "stall"; }
+      else if (c === r.d) { k = "ID"; t = "ID"; }
+      else if (c > r.d && c < r.E) { k = "st"; t = "stall"; }
+      else if (c === r.E) { k = "EX"; t = "EX"; }
+      else if (c === r.E + 1) { k = "MEM"; t = "MEM"; }
+      else if (c === r.E + 2) { k = "WB"; t = "WB"; }
+      h.push(`<td class="${k}${c > cur ? " off" : ""}${c === cur && cur < total ? " now" : ""}" data-c="${c}">${t}</td>`);
+    }
+    h.push("</tr>");
+  });
+  $("gantt").innerHTML = h.join("");
+  $("slider").max = total; $("slider").value = cur;
+  $("cyc").textContent = "cycle " + cur + " of " + total;
+}
+
+function stop() { if (timer) { clearInterval(timer); timer = null; } $("play").textContent = "Play"; }
+$("play").onclick = () => {
+  if (timer) return stop();
+  if (cur >= total) cur = 0;
+  $("play").textContent = "Pause";
+  timer = setInterval(() => { cur++; draw(); if (cur >= total) stop(); $("play").textContent = timer ? "Pause" : "Replay"; }, 520);
+  cur++; draw();
+};
+$("step").onclick = () => { stop(); cur = cur >= total ? 1 : cur + 1; draw(); };
+$("slider").oninput = e => { stop(); cur = +e.target.value; draw(); };
+
+$("fix").onclick = () => {
+  const p = parse($("code").value);
+  if (!p.length) return;
+  const fw = $("fw").checked, before = totalOf(sim(p, fw)), order = best(p, fw), b = $("banner");
+  b.hidden = false;
+  if (!order) { b.style.borderColor = "var(--stall)"; b.textContent = "Reordering works on up to 8 instructions. Remove a few and try again."; return; }
+  const np = order.map(i => p[i]), after = totalOf(sim(np, fw));
+  if (after < before) {
+    $("code").value = np.map(x => x.text).join("\n");
+    b.style.borderColor = "var(--ok)";
+    b.textContent = `Reordered: ${before} cycles down to ${after}. The new order is in the box, and nothing changes in what the program computes.`;
+    run();
+  } else {
+    b.style.borderColor = "var(--accent)";
+    b.textContent = "This is already the fastest valid order for these instructions.";
+  }
+};
+
+let t0;
+const chips = $("chips");
+Object.keys(SAMPLES).forEach((name, i) => {
+  const b = document.createElement("button");
+  b.textContent = name; b.setAttribute("aria-pressed", i === 0);
+  b.onclick = () => {
+    chips.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    $("code").value = SAMPLES[name]; $("banner").hidden = true; run();
+  };
+  chips.appendChild(b);
+});
+$("fw").onchange = () => { $("banner").hidden = true; run(); };
+$("code").oninput = () => { chips.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false")); clearTimeout(t0); t0 = setTimeout(run, 300); };
+$("code").value = SAMPLES["Load then use"];
+run();
+
+/* ---------- Branch lab ---------- */
+function rng(seed) { let s = seed; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function outcomes(name) {
+  const n = 24;
+  if (name === "Loop, taken 7 of 8") return Array.from({ length: n }, (_, i) => i % 8 !== 7);
+  if (name === "Alternating") return Array.from({ length: n }, (_, i) => i % 2 === 0);
+  const mostly = name === "Mostly taken", r = rng(mostly ? 7 : 3), p = mostly ? 0.85 : 0.5;
+  return Array.from({ length: n }, () => r() < p);
+}
+function guesses(kind, out) {
+  let s1 = false, s2 = 1;
+  return out.map(a => {
+    let g;
+    if (kind === "Always not taken") g = false;
+    else if (kind === "Always taken") g = true;
+    else if (kind === "1-bit") { g = s1; s1 = a; }
+    else { g = s2 >= 2; s2 = Math.max(0, Math.min(3, s2 + (a ? 1 : -1))); }
+    return g;
+  });
+}
+const PREDS = ["Always not taken", "Always taken", "1-bit", "2-bit"];
+let pat = "Loop, taken 7 of 8", prd = "2-bit";
+function missesOf(kind, out) { const g = guesses(kind, out); return out.filter((a, i) => a !== g[i]).length; }
+function branchLab() {
+  const out = outcomes(pat), gu = guesses(prd, out), bad = out.map((a, i) => a !== gu[i]);
+  const mis = bad.filter(Boolean).length, acc = 100 * (24 - mis) / 24;
+  const cell = (v, b) => `<span class="cell ${v ? "T" : "N"}${b ? " bad" : ""}">${v ? "T" : "N"}</span>`;
+  $("strip").innerHTML = `<div class="srow"><em>Actual</em>${out.map(a => cell(a, false)).join("")}</div><div class="srow"><em>Guess</em>${gu.map((g, i) => cell(g, bad[i])).join("")}</div>`;
+  count($("b-acc"), acc, 0); count($("b-mis"), mis, 0); count($("b-pen"), mis * 2, 0);
+  count($("b-cpi"), 1 + 0.2 * (mis / 24) * 2, 2);
+  const ranked = PREDS.map(k => [k, missesOf(k, out)]).sort((a, b) => a[1] - b[1]), top = ranked[0];
+  $("b-say").textContent = `${prd} gets ${Math.round(acc)} percent right on this pattern. ` +
+    (top[0] === prd ? "That is the best of the four predictors here." : `${top[0]} does best here, with ${top[1]} wrong guesses.`) +
+    (prd === "2-bit" ? " A 2-bit predictor needs two wrong guesses in a row before it changes its mind, so one loop exit costs it a single miss." : "");
+}
+function chipRow(id, names, start, onPick) {
+  const box = $(id);
+  names.forEach(n => {
+    const b = document.createElement("button");
+    b.textContent = n; b.setAttribute("aria-pressed", n === start);
+    b.onclick = () => { box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", "true"); onPick(n); };
+    box.appendChild(b);
+  });
+}
+chipRow("pat", ["Loop, taken 7 of 8", "Alternating", "Mostly taken", "Unpredictable"], pat, n => { pat = n; branchLab(); });
+chipRow("pred", PREDS, prd, n => { prd = n; branchLab(); });
+branchLab();
+
+/* ---------- Cloud check (works on the deployed link, where /analyze exists) ---------- */
+async function cloudCheck() {
+  const b = $("cres");
+  b.hidden = false; b.style.borderColor = "var(--accent)";
+  b.textContent = "Contacting the cloud. The first call can take up to a minute.";
+  try {
+    const r = await fetch("/analyze", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: $("code").value, forwarding: $("fw").checked }) });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || ("server said " + r.status)); }
+    const d = await r.json();
+    let t = `The cloud simulation gives ${d.cycles} cycles, ${d.stalls} stall cycles and CPI ${d.cpi}` +
+      (d.cycles === total ? ", which matches this page." : ". This page shows a different number, so run the program again and compare.");
+    if (d.exact) t += ` Trying every safe order, the best one saves ${d.exact.saved} cycle${d.exact.saved === 1 ? "" : "s"}.`;
+    if (d.ml) t += d.ml.in_training_range
+      ? ` The AI model guessed ${d.ml.predicted_saved} without searching (its typical error is ${d.ml.typical_error} cycles).`
+      : " The AI model was trained on programs of 6 to 8 instructions, so it does not guess for this size.";
+    else t += " The AI model is not loaded on the server yet.";
+    b.style.borderColor = "var(--ok)"; b.textContent = t;
+  } catch (e) {
+    b.style.borderColor = "var(--stall)";
+    b.textContent = "The cloud API could not be reached from this page (" + e.message + "). Open the deployed link to use this button.";
+  }
+}
+$("cloud").onclick = cloudCheck;
+fetch("/stats").then(r => r.ok ? r.json() : null).then(s => {
+  if (!s) return;
+  $("cstat").textContent = s.dataset ? Number(s.dataset.programs).toLocaleString() + " programs simulated for training" : "Training summary not saved yet";
+}).catch(() => {});
+</script>
+</body>
+</html>
